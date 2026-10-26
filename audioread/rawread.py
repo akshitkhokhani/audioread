@@ -122,6 +122,7 @@ class RawAudioFile(AudioFile):
         """Generates blocks of PCM data found in the file."""
         old_width = self._file.getsampwidth()
         needs_conversion = old_width != TARGET_WIDTH
+        unsigned_wav = old_width == 1 and isinstance(self._file, wave.Wave_read)
         needs_byteswap = (
             self._needs_byteswap and self._file.getcomptype() != 'sowt'
         )
@@ -129,7 +130,7 @@ class RawAudioFile(AudioFile):
             needs_conversion and self._needs_byteswap
             and self._file.getcomptype() in ('NONE', b'NONE')
         )
-        if convert_big_endian:
+        if convert_big_endian or unsigned_wav:
             # lin2lin reads and writes native-endian samples.
             needs_byteswap = sys.byteorder == 'big'
 
@@ -139,6 +140,9 @@ class RawAudioFile(AudioFile):
                 break
 
             # Make sure we have the desired bitdepth and endianness.
+            if unsigned_wav:
+                # WAV stores 8-bit PCM unsigned; audioop expects signed PCM.
+                data = audioop.bias(data, 1, -128)
             if needs_conversion:
                 if convert_big_endian and sys.byteorder == 'little':
                     data = audioop.byteswap(data, old_width)
