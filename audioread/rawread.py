@@ -17,6 +17,7 @@ import aifc
 import array
 import audioop
 import sunau
+import sys
 import wave
 
 from .exceptions import DecodeError
@@ -124,6 +125,13 @@ class RawAudioFile(AudioFile):
         needs_byteswap = (
             self._needs_byteswap and self._file.getcomptype() != 'sowt'
         )
+        convert_big_endian = (
+            needs_conversion and self._needs_byteswap
+            and self._file.getcomptype() in ('NONE', b'NONE')
+        )
+        if convert_big_endian:
+            # lin2lin reads and writes native-endian samples.
+            needs_byteswap = sys.byteorder == 'big'
 
         while True:
             data = self._file.readframes(block_samples)
@@ -132,6 +140,8 @@ class RawAudioFile(AudioFile):
 
             # Make sure we have the desired bitdepth and endianness.
             if needs_conversion:
+                if convert_big_endian and sys.byteorder == 'little':
+                    data = audioop.byteswap(data, old_width)
                 data = audioop.lin2lin(data, old_width, TARGET_WIDTH)
             if needs_byteswap:
                 # Big-endian data. Swap endianness.
